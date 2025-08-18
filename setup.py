@@ -6,7 +6,7 @@ requirements = [
 
 setup(
     name="fbusl",
-    version='0.05.16',
+    version='0.05.17',
     packages=find_packages(),
     license="MIT",
     author="Oliver Morrison",
