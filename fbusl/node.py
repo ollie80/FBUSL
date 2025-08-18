@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Union
-from FreeBodyEngine.graphics.fbusl import Position
+from fbusl import Position
 class ASTNode:
     def __init__(self, pos: Position = Position()):
         self.pos: Position = pos

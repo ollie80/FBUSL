@@ -1,6 +1,5 @@
-from FreeBodyEngine.graphics.fbusl.ast_nodes import *
-from FreeBodyEngine.utils import abstractmethod
-from FreeBodyEngine.graphics.fbusl.semantic import SemanticAnalyser
+from fbusl.ast_nodes import *
+from fbusl.semantic import SemanticAnalyser
 
 class Generator:
     """
@@ -11,6 +10,5 @@ class Generator:
         self.analyser = analyser
         self.buffer_index = buffer_index
 
-    @abstractmethod
     def generate(self) -> str:
         pass

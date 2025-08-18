@@ -1,9 +1,9 @@
 from typing import List
 import re
-from FreeBodyEngine.graphics.fbusl import fbusl_error, Position
+from fbusl import fbusl_error, Position
 from typing import List, Optional
 from enum import Enum, auto
-from FreeBodyEngine.graphics.fbusl.node import *
+from fbusl.node import *
 import sys
 
 

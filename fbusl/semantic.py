@@ -1,9 +1,8 @@
-from FreeBodyEngine.graphics.fbusl.ast_nodes import *
-from FreeBodyEngine.graphics.fbusl import fbusl_error
+from fbusl.ast_nodes import *
+from fbusl import fbusl_error
 
 class GenericVar:
     def __init__(self, name: Identifier | str, type: str, value=None):
-        # Accept either an Identifier node or string for name
         if isinstance(name, Identifier):
             self.name = name.name
             self.ident = name

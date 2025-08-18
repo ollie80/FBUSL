@@ -1,6 +1,5 @@
-from FreeBodyEngine.graphics.fbusl.ast_nodes import *
-from FreeBodyEngine.graphics.fbusl.semantic import Function
-from FreeBodyEngine.utils import abstractmethod
+from fbusl.ast_nodes import *
+from fbusl.semantic import Function
 from typing import Literal
 
 

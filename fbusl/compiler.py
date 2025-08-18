@@ -1,5 +1,4 @@
-from FreeBodyEngine.graphics import fbusl
-from FreeBodyEngine import get_main
+from fbusl.parser import Lexer, Parser
 from typing import Literal
 import sys
 from enum import Enum, auto
@@ -13,9 +12,9 @@ class ShaderType:
 
 
 def compile(source):
-    lexer = fbusl.parser.Lexer(source)
+    lexer = Lexer(source)
     tokens = lexer.tokenize()
 
-    parser = fbusl.parser.Parser(tokens)
+    parser = Parser(tokens)
     parser.parse()
 
