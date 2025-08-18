@@ -15,17 +15,6 @@ class ASTNode:
     def __repr__(self):
         return f"{self.__class__.__name__}(pos={self.pos})"
 
-
-class Program(ASTNode):
-    def __init__(self, pos: Position = Position()):
-        super().__init__(pos)
-        self.functions: List['FunctionDef'] = []
-        self.outputs: List['OutputVar'] = []
-
-    def __repr__(self):
-        return f"Program(functions={self.functions}, outputs={self.outputs}, pos={self.pos})"
-
-
 class FunctionDef(ASTNode):
     def __init__(self, name: str, body: List[ASTNode], return_type: str, params: List['FunctionParam'], overloads: Optional[List['FunctionParam']] = [], pos: Position = Position()):
         super().__init__(pos)
