@@ -23,12 +23,12 @@ def fbusl_error(msg, position: Position=Position()):
     sys.exit()
 
 
-from FreeBodyEngine.graphics.fbusl import parser
-from FreeBodyEngine.graphics.fbusl import ast_nodes
-from FreeBodyEngine.graphics.fbusl import injector
-from FreeBodyEngine.graphics.fbusl import semantic
-from FreeBodyEngine.graphics.fbusl import generator
-from FreeBodyEngine.graphics.fbusl.compiler import compile
+from fbusl import parser
+from fbusl import ast_nodes
+from fbusl import injector
+from fbusl import semantic
+from fbusl import generator
+from fbusl.compiler import compile
 
 
 

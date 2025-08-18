@@ -1,4 +1,3 @@
-from fbusl.ast_nodes import *
 from fbusl import fbusl_error
 
 class GenericVar:
