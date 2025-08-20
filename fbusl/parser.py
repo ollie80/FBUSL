@@ -16,7 +16,6 @@ class Token:
     def __repr__(self):
         return f"Token({self.kind}, {repr(self.value)})"
 
-
 class TokenType(Enum):
     ARROW = auto()
     DECORATOR = auto()
@@ -34,7 +33,6 @@ class TokenType(Enum):
     INDENT = auto()
     DEDENT = auto()
 
-
 TOKEN_TYPES = [
     (TokenType.NEWLINE, r"\n"),  # newlines first
     (TokenType.WHITESPACE, r"[ \t]+"),  # only spaces and tabs
@@ -48,21 +46,27 @@ TOKEN_TYPES = [
     (TokenType.INT, r"\d(?:_?\d)*"),
     (TokenType.SYMBOL, r"[{}()[\]:,\.]"),
     (TokenType.OPERATOR, r"(\+=|-=|\*=|/=|=|\+|-|\*|/|==|!=|<=|>=|<|>)"),
-    (TokenType.COMMENT, r"#.*"),
+    (TokenType.COMMENT, r"#.*")
 ]
 
 TOKEN_REGEX = [(kind, re.compile(pattern)) for kind, pattern in TOKEN_TYPES]
-
 
 class Lexer:
     def __init__(self, code: str, filename: str = None):
         self.code = code
         self.filename = filename
-        self.pos = 0
-        self.line = 1
+        self.pos = 0                 # absolute offset
+        self.line = 1                # 1-based line number
+        self.column = 0              # 0-based column within line
         self.length = len(code)
-        self.indents = [0]  # stack of indentation levels
+        self.indents = [0]
         self._pending_tokens: List[Token] = []
+
+    def _make_position(self, start: int, end: int) -> Position:
+        """Create a Position object for a token spanning [start:end]."""
+        line = self.line
+        col = self.column + (start - self.pos)
+        return Position(line, self.filename, col, start, end)
 
     def next_token(self) -> Optional[Token]:
         if self._pending_tokens:
@@ -71,55 +75,70 @@ class Lexer:
         if self.pos >= self.length:
             if len(self.indents) > 1:
                 self.indents.pop()
-                return Token(TokenType.DEDENT, "", Position(self.line, self.filename))
+                return Token(
+                    TokenType.DEDENT, "",
+                    Position(self.line, self.filename, self.column, self.pos, self.pos)
+                )
             return None
 
-        if self.code[self.pos] == "\n":
+        ch = self.code[self.pos]
+
+        if ch == "\n":
             self.pos += 1
             self.line += 1
+            self.column = 0
+
             start_pos = self.pos
             while self.pos < self.length and self.code[self.pos] in " \t":
                 self.pos += 1
+                self.column += 1
             indent = self.pos - start_pos
             last_indent = self.indents[-1]
 
             if indent > last_indent:
                 self.indents.append(indent)
-
                 self._pending_tokens.append(
-                    Token(TokenType.INDENT, "", Position(self.line, self.filename))
+                    Token(TokenType.INDENT, "", Position(self.line, self.filename, self.column, self.pos, self.pos))
                 )
             elif indent < last_indent:
                 while len(self.indents) > 1 and indent < self.indents[-1]:
                     self.indents.pop()
                     self._pending_tokens.append(
-                        Token(TokenType.DEDENT, "", Position(self.line, self.filename))
+                        Token(TokenType.DEDENT, "", Position(self.line, self.filename, self.column, self.pos, self.pos))
                     )
 
             return Token(
-                TokenType.NEWLINE, "\n", Position(self.line - 1, self.filename)
+                TokenType.NEWLINE, "\n",
+                Position(self.line - 1, self.filename, 0, self.pos - 1, self.pos)
             )
 
-        if self.code[self.pos] == "#":
+        if ch == "#":
             while self.pos < self.length and self.code[self.pos] != "\n":
                 self.pos += 1
+                self.column += 1
             return self.next_token()
 
         for kind, pattern in TOKEN_REGEX:
             match = pattern.match(self.code, self.pos)
             if match:
                 value = match.group(0)
-                tok_pos = Position(self.line, self.filename)
-                self.pos = match.end()
+                start = self.pos
+                end = match.end()
+                tok_pos = Position(self.line, self.filename, self.column, start, end)
+
+                self.pos = end
+                self.column += len(value)
+
                 if kind in (TokenType.WHITESPACE, TokenType.COMMENT):
                     return self.next_token()  # skip
                 return Token(kind, value, tok_pos)
 
         fbusl_error(
-            f"Unexpected character: {self.code[self.pos]}",
-            Position(self.line, self.filename),
+            f"Unexpected character: {repr(str(self.code[self.pos]))}",
+            Position(self.line, self.filename, self.column, self.pos, self.pos + 1),
         )
         self.pos += 1
+        self.column += 1
         return self.next_token()
 
     def tokenize(self) -> List[Token]:
@@ -132,11 +151,10 @@ class Lexer:
         while len(self.indents) > 1:
             self.indents.pop()
             tokens.append(
-                Token(TokenType.DEDENT, "", Position(self.line, self.filename))
+                Token(TokenType.DEDENT, "", Position(self.line, self.filename, self.column, self.pos, self.pos))
             )
 
         return tokens
-
 
 class Parser:
     def __init__(self, tokens: list[Token]):
@@ -223,9 +241,13 @@ class Parser:
         if token.kind == TokenType.KEYWORD:
             if token.value == "def":
                 return self.parse_function_def()
+            if token.value == "struct":
+                return self.parse_struct_def()
 
         if token.kind == TokenType.IDENT:
             return self.parse_identifier()
+        
+
 
     def parse_type(self) -> dict:
         name = self.expect(TokenType.IDENT).value
@@ -237,6 +259,7 @@ class Parser:
             self.expect(TokenType.SYMBOL, "]")
 
             return {"name": "array", "data": {"length": length, "base_type": name}}
+        
         else:
             return {"name": name}
 
@@ -287,7 +310,6 @@ class Parser:
             if node is None:
                 self.consume()  # skip unknown or blank token
                 continue
-            print(node)
 
             if isinstance(node, list):
                 body.extend(node)
@@ -300,6 +322,29 @@ class Parser:
         self.expect(TokenType.DEDENT)
 
         return FunctionDef(name, body, return_type, params)
+
+    def parse_struct_def(self) -> StructDef:
+        position = self.get_current_pos()
+
+        self.expect(TokenType.KEYWORD, 'struct')
+        name = self.expect(TokenType.IDENT).value
+        self.expect(TokenType.SYMBOL, ':')
+        self.expect(TokenType.NEWLINE)
+        self.expect(TokenType.INDENT)
+
+        fields = []
+        while self.peek().kind != TokenType.DEDENT:
+            field_position = self.get_current_pos()
+            field_name = self.expect(TokenType.IDENT).value
+            field_type, field_precision = self.parse_type_and_qualifier()
+
+            fields.append(StructField(field_name, field_type, field_position))  
+
+            self.expect(TokenType.NEWLINE)
+
+        self.expect(TokenType.DEDENT)
+
+        return StructDef(name, fields, position)
 
     def parse_decorator(self) -> ASTNode:
         decorator_type = self.expect(TokenType.DECORATOR).value
@@ -340,8 +385,8 @@ class Parser:
         self.expect(TokenType.SYMBOL, ":")
 
         prec = None
-        if self.peek().kind == TokenType.qualifier:
-            prec = self.expect(TokenType.qualifier).value
+        if self.peek().kind == TokenType.QUALIFIER:
+            prec = self.expect(TokenType.QUALIFIER).value
 
         node_type = self.parse_type()
 
@@ -368,7 +413,7 @@ class Parser:
                 self.consume()
                 args = self.parse_call_args()
                 self.expect(TokenType.SYMBOL, ")")
-                node = FuncCall(node, args, pos=self.get_current_pos())
+                node = FuncCall(node.value, args, pos=self.get_current_pos())
 
             elif tok.kind == TokenType.OPERATOR and tok.value == "=":
                 self.consume()
@@ -376,7 +421,7 @@ class Parser:
                 node = Setter(node, expr, self.get_current_pos())
 
             elif tok.kind == TokenType.SYMBOL and tok.value == ":":
-                self.parse_var_decl(node.value)
+                return self.parse_var_decl(node.value)
 
             else:
                 break
@@ -456,21 +501,32 @@ class Parser:
         return args
 
     def parse_expression(self, precedence=0) -> ASTNode:
-        left = self.parse_primary()
+        left = self.parse_unary()
 
         while True:
             tok = self.peek()
             if tok.kind != TokenType.OPERATOR:
                 break
+
             op = tok.value
             op_prec = self.get_operator_precedence(op)
             if op_prec < precedence:
                 break
+
             self.consume()
             right = self.parse_expression(op_prec + 1)
             left = BinOp(left, op, right)
 
         return left
+
+    def parse_unary(self) -> ASTNode:
+        tok = self.peek()
+        if tok.kind == TokenType.OPERATOR and tok.value in ("+", "-", "not"):
+            op = self.consume().value
+            operand = self.parse_unary()
+            return UnaryOp(op, operand, pos=tok.pos)
+        else:
+            return self.parse_primary()
 
     def parse_primary(self) -> ASTNode:
         tok = self.peek()
@@ -482,15 +538,10 @@ class Parser:
             return self.parse_literal()
 
         elif tok.kind == TokenType.SYMBOL and tok.value == "(":
-            self.consume()  # consume "("
+            self.consume()
             expr = self.parse_expression()
             self.expect(TokenType.SYMBOL, ")")
             return expr
-
-        elif tok.kind == TokenType.OPERATOR and tok.value in ("+", "-", "not"):
-            op = self.consume().value
-            operand = self.parse_primary()
-            return UnaryOp(op, operand, pos=tok.pos)
 
         else:
             fbusl_error(

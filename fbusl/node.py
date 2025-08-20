@@ -1,5 +1,6 @@
 from typing import List, Optional, Dict, Union
 from fbusl import Position
+
 class ASTNode:
     def __init__(self, pos: Position = Position()):
         self.pos: Position = pos
@@ -11,6 +12,9 @@ class ASTNode:
 
     def add_child(self, node: 'ASTNode'):
         self.children.append(node)
+
+    def __str__(self):
+        return repr(self)
 
     def __repr__(self):
         return f"{self.__class__.__name__}(pos={self.pos})"
@@ -27,23 +31,40 @@ class FunctionDef(ASTNode):
         self.overloads: List[Dict] = overloads
 
     def __repr__(self):
-        return (f"FunctionDef(name={self.name}, return_type={self.type}, "
-                f"params={self.params}, body={self.body}, overloads={self.overloads}, pos={self.pos})")
+        return (f"FunctionDef(name={self.name}, return_type={self.type}, params={self.params}, body={self.body}, overloads={self.overloads}, pos={self.pos})")
 
 class FunctionParam(ASTNode):
     def __init__(self, name: str, var_type: dict, qualifier: str | None, pos: Position = Position()):
         super().__init__(pos)
         self.qualifier = qualifier
         self.name = name
-        self.var_type = var_type
-        
+        self.type = var_type
+
+class StructDef(ASTNode):
+    def __init__(self, name: str, fields: list['StructField'], position: Position = Position()):
+        super().__init__(position)
+        self.name = name
+        self.fields = fields
+
+    def __repr__(self):
+        return f"StructDef(name={self.name}, fields={self.fields}, pos={self.pos})"
+
+class StructField(ASTNode):
+    def __init__(self, name: str, field_type: dict, position: Position = Position()):
+        super().__init__(position)
+        self.name = name
+        self.type = field_type
+
+    def __repr__(self):
+        return f"Field(name={self.name}, type={self.type})"
 
 class VarDecl(ASTNode):
-    def __init__(self, name: str, var_type: dict, value: Optional[ASTNode] = None, pos: Position = Position()):
+    def __init__(self, name: str, var_type: dict, value: Optional[ASTNode] = None, qualifier: str = None, pos: Position = Position()):
         super().__init__(pos)
         self.name = name
         self.type = var_type
-        self.value = value
+        self.qualifier = qualifier
+        self.value: ASTNode = value
         if value:
             self.add_child(value)
 
@@ -54,11 +75,11 @@ class Setter(ASTNode):
     def __init__(self, node: ASTNode, to: ASTNode, pos: Position = Position()):
         super().__init__(pos)
         self.node = node
-        self.to = to
+        self.value = to
         self.add_child(to)
     
     def __repr__(self):
-        return f"Setter(node={self.node}, to={self.to}, pos={self.pos})"
+        return f"Setter(node={self.node}, to={self.value}, pos={self.pos})"
 
 class Output(ASTNode):
     def __init__(self, name: str, var_type: dict, qualifier: str, pos: Position = Position()):
@@ -153,12 +174,11 @@ class ArrayAccess(ASTNode):
 
 
 class FuncCall(ASTNode):
-    def __init__(self, func: ASTNode, args: List[ASTNode], pos: Position = Position()):
+    def __init__(self, name: str, args: List[ASTNode], pos: Position = Position()):
         super().__init__()
-        self.func = func
+        self.name = name
         self.args = args
         self.pos = pos
-        self.add_child(func)
         for arg in args:
             self.add_child(arg)
 

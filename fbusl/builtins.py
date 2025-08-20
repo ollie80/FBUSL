@@ -1,26 +1,28 @@
 from itertools import product
+from fbusl import ShaderType
+from itertools import product
 
+from itertools import product
 
-def generate_overloads_with_cost(param_slots, allowed_types_map, max_size=None):
-    """
-    Generate overloads using types from allowed_types_map.
-    Each overload keeps track of type costs.
-    """
+def generate_overloads_with_cost(param_slots, allowed_types_map, max_cost=1):
     overloads = []
-    n_slots = max_size if max_size else len(param_slots)
-
     type_list = list(allowed_types_map.keys())
 
-    for n in range(1, n_slots + 1):
+    for n in range(1, len(param_slots) + 1):
         slots_subset = param_slots[:n]
 
         for combo in product(type_list, repeat=n):
-            overload = {"params": {name: t for name, t in zip(slots_subset, combo)}}
-            overload["cost"] = sum(allowed_types_map[t] for t in combo)
-            overloads.append(overload)
+            cost = sum(int(allowed_types_map[t]) for t in combo)
+
+            # Only keep combinations with exact cost
+            if cost == max_cost:
+                params = dict(zip(slots_subset, combo))
+                overloads.append({
+                    "params": params,
+                    "cost": cost,
+                })
 
     return overloads
-
 
 TYPES = {
     "int": {
@@ -166,10 +168,10 @@ TYPES = {
         "fields": {"col0": "vec4", "col1": "vec4", "col2": "vec4", "col3": "vec4"},
         "operations": {"*": {"float": "mat4", "vec4": "vec4", "mat4": "mat4"}},
     },
-    "texture": {"fields"},
+    "texture": {},
     "array": {
-        "data": {"element_type": str, "length": int},
-        "operations": {[]: lambda array_type: array_type["data"]["element_type"]},
+        "data": {"base_type": str, "length": int},
+        "operations": {"[]": lambda array_type: array_type["data"]["base_type"]},
     },
 }
 
@@ -181,14 +183,14 @@ BUILTINS = {
             "return": "vec2",
             "kind": "function",
             "overloads": generate_overloads_with_cost(
-                ["x", "y"], {"float": 1, "vec2": "2"}, max_size=2
+                ["x", "y"], {"float": 1, "vec2": "2"}, max_cost=2
             ),
         },
         "vec3": {
             "return": "vec3",
             "kind": "function",
             "overloads": generate_overloads_with_cost(
-                ["x", "y", "z"], {"float": 1, "vec2": "2", "vec3": 3}, max_size=3
+                ["x", "y", "z"], {"float": 1, "vec2": "2", "vec3": 3}, max_cost=3
             ),
         },
         "vec4": {
@@ -197,7 +199,7 @@ BUILTINS = {
             "overloads": generate_overloads_with_cost(
                 ["x", "y", "z", "w"],
                 {"float": 1, "vec2": 2, "vec3": 3, "vec4": 4},
-                max_size=4,
+                max_cost=4,
             ),
         },
         "mat2": {
@@ -231,6 +233,11 @@ BUILTINS = {
                 },
             ],
         },
+        "sample": {
+            "kind": "function",
+            "return": "vec4",
+            "params": {"tex": "texture", "sample_position": "vec2"},
+        },
     },
-    "vertex": {"VERTEX_POSITION": {"type": "vec2", "kind": "output"}},
+    ShaderType.VERTEX: {"VERTEX_POSITION": {"type": "vec4", "kind": "output"}},
 }
