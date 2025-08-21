@@ -71,7 +71,8 @@ class ShaderType:
 from fbusl import semantic
 from fbusl import optimizer
 from fbusl import parser
+from fbusl import generator
 from fbusl.compiler import compile
 
 
-__all__ = ["fbusl_error", "ShaderType", "Position", "parser", "compile", "optimizer", "semantic"]
+__all__ = ["fbusl_error", "ShaderType", "Position", "parser", "generator", "compile", "optimizer", "semantic"]
