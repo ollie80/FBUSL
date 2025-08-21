@@ -68,9 +68,10 @@ class ShaderType:
     COMPUTE = "compute"
     GEOMETRY = "geometry"
 
-
+from fbusl import semantic
+from fbusl import optimizer
 from fbusl import parser
 from fbusl.compiler import compile
 
 
-__all__ = ["fbusl_error", "ShaderType", "parser", "compile"]
+__all__ = ["fbusl_error", "ShaderType", "Position", "parser", "compile", "optimizer", "semantic"]

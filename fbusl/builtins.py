@@ -14,7 +14,6 @@ def generate_overloads_with_cost(param_slots, allowed_types_map, max_cost=1):
         for combo in product(type_list, repeat=n):
             cost = sum(int(allowed_types_map[t]) for t in combo)
 
-            # Only keep combinations with exact cost
             if cost == max_cost:
                 params = dict(zip(slots_subset, combo))
                 overloads.append({

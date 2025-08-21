@@ -45,7 +45,7 @@ TOKEN_TYPES = [
     (TokenType.FLOAT, r"\d(?:_?\d)*\.\d(?:_?\d)*"),
     (TokenType.INT, r"\d(?:_?\d)*"),
     (TokenType.SYMBOL, r"[{}()[\]:,\.]"),
-    (TokenType.OPERATOR, r"(\+=|-=|\*=|/=|=|\+|-|\*|/|==|!=|<=|>=|<|>)"),
+    (TokenType.OPERATOR, r"(\+=|==|!=|<=|>=|-=|\*=|/=|=|\+|-|\*|/|<|>)"),
     (TokenType.COMMENT, r"#.*")
 ]
 
@@ -243,11 +243,61 @@ class Parser:
                 return self.parse_function_def()
             if token.value == "struct":
                 return self.parse_struct_def()
+            if token.value in {"if", "else", 'elif'}:
+                return self.parse_if_statement()
 
         if token.kind == TokenType.IDENT:
             return self.parse_identifier()
-        
 
+    def parse_if_statement(self):
+        pos = self.get_current_pos()
+        kw = self.expect(TokenType.KEYWORD).value
+
+        condition = None
+
+        if kw in {"if", "elif"}:
+
+            if self.peek().value == "(":
+                self.consume()
+                condition = self.parse_expression()
+                self.expect(TokenType.SYMBOL, ")")
+            else:
+                condition = self.parse_expression()
+
+        self.expect(TokenType.SYMBOL, ":")
+        self.expect(TokenType.NEWLINE)
+        self.expect(TokenType.INDENT)
+
+        body = []
+        while self.peek().kind != TokenType.DEDENT:
+            body.append(self.parse_next())
+            if self.peek().kind == TokenType.NEWLINE:
+                self.consume()
+
+        self.expect(TokenType.DEDENT)
+
+        next_clause = None
+        if self.peek().kind == TokenType.KEYWORD and self.peek().value in {"elif", "else"}:
+            next_clause = self.parse_if_statement()
+
+        return IfStatement(condition, kw, body, next_clause, pos)
+
+    def parse_inline_if(self):
+        then_expr = self.parse_expression()
+
+        if self.peek().kind == TokenType.KEYWORD and self.peek().value == "if":
+            self.consume()
+            condition = self.parse_expression()
+
+            if self.peek().kind != TokenType.KEYWORD or self.peek().value != "else":
+                fbusl_error("Expected 'else' in inline if expression", self.get_current_pos())
+            self.consume()
+
+            else_expr = self.parse_expression()
+
+            return InlineIf(then_expr, condition, else_expr)
+
+        return then_expr
 
     def parse_type(self) -> dict:
         name = self.expect(TokenType.IDENT).value
@@ -503,6 +553,17 @@ class Parser:
     def parse_expression(self, precedence=0) -> ASTNode:
         left = self.parse_unary()
 
+        if self.peek().kind == TokenType.KEYWORD and self.peek().value == "if":
+            self.consume()
+            condition = self.parse_expression()
+
+            if self.peek().kind != TokenType.KEYWORD or self.peek().value != "else":
+                fbusl_error("Expected 'else' in inline if expression", self.get_current_pos())
+            self.consume()
+
+            else_expr = self.parse_expression()
+            return InlineIf(left, condition, else_expr)
+
         while True:
             tok = self.peek()
             if tok.kind != TokenType.OPERATOR:
@@ -518,6 +579,7 @@ class Parser:
             left = BinOp(left, op, right)
 
         return left
+
 
     def parse_unary(self) -> ASTNode:
         tok = self.peek()

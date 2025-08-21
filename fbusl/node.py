@@ -134,7 +134,52 @@ class BinOp(ASTNode):
         self.add_child(right)
 
     def __repr__(self):
-        return f"BinOp(op={self.op}, left={self.left}, right={self.right}, pos={self.pos})"
+        return f'BinOp(op="{self.op}", left={self.left}, right={self.right}, pos={self.pos})'
+
+
+class Condition(ASTNode):
+    def __init__(self, comparison: str, left: ASTNode, right: ASTNode, pos: Position = Position()):
+        super().__init__(pos)
+        self.comparison = comparison
+        self.left = left
+        self.right = right
+        self.add_child(self.left)
+        self.add_child(self.right)
+
+
+    def __repr__(self):
+        return f'Condition(comp="{self.comparison}", left={self.left}, right={self.right})'
+
+
+class IfStatement(ASTNode):
+    def __init__(self, condition: Condition, if_type: str, body: list[ASTNode], next_statement: 'IfStatement' = None, pos: Position = Position()):
+        super().__init__(pos)
+        self.condition = condition
+        self.body = body
+        for node in self.body:
+            self.add_child(node)
+
+        self.if_type = if_type
+        self.next_statement = next_statement
+        self.add_child(self.next_statement)
+
+    def __repr__(self):
+
+        return f"{self.if_type.capitalize()}Statement(condition={self.condition}, body={self.body},next={self.next_statement})"
+
+class InlineIf(ASTNode):
+    def __init__(self, then_expr: ASTNode, condition: ASTNode, else_expr: ASTNode, pos: Position = Position()):
+        super().__init__(pos)
+        self.then_expr = then_expr
+        self.condition = condition
+        self.else_expr = else_expr
+
+        self.add_child(then_expr)
+        self.add_child(condition)
+        self.add_child(else_expr)
+
+    def __repr__(self):
+        return f"InlineIf(then={self.then_expr}, cond={self.condition}, else={self.else_expr})"
 
 
 class UnaryOp(ASTNode):
@@ -183,7 +228,7 @@ class FuncCall(ASTNode):
             self.add_child(arg)
 
     def __repr__(self):
-        return f"FuncCall(func={self.func}, args={self.args}, pos={self.pos})"
+        return f"FuncCall(func={self.name}, args={self.args}, pos={self.pos})"
 
 
 class Literal(ASTNode):

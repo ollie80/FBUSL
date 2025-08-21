@@ -17,7 +17,7 @@ struct Test:
 
 def main(t: int) -> void:
     normal = in_normal
-
+    
     t: Test = Test(1.0, uv.x)
     uv = in_uv
 

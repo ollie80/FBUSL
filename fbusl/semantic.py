@@ -278,7 +278,7 @@ class SemanticAnalyser:
     def find_node_at_position(self, line: int, column: int):
         def recurse(node):
             pos = node.pos
-            if pos.line == line and pos.column <= column <= pos.end:
+            if pos.line == line and pos.start <= column <= pos.end:
                 for child in getattr(node, "children", []):
                     found = recurse(child)
                     if found:
