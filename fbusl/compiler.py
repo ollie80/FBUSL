@@ -21,7 +21,7 @@ def compile(source, shader_type: ShaderType):
     semantics = SemanticAnalyser(tree, shader_type)
     semantics.analyse()
 
-    optimizer = Optimizer(tree)    
+    optimizer = Optimizer(tree)
     tree = optimizer.optimize()
 
     generator = Generator(tree)
