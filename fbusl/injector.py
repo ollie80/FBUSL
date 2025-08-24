@@ -5,7 +5,7 @@ class Injector:
     def __init__(self, shader_type: ShaderType):
         self.shader_type = shader_type
     
-    def get_builtins() -> dict:
+    def get_builtins(self) -> dict:
         return {}
 
     def ast_inject(self, tree: list[ASTNode]):
