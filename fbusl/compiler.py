@@ -9,8 +9,8 @@ from enum import Enum, auto
 from fbusl import ShaderType, FBUSLError
 
 
-def compile(source, shader_type: ShaderType, generator_class: type[Generator], injector_class: type[Injector] = Injector):
-    injector = injector_class(shader_type)
+def compile(source, shader_type: ShaderType, generator_class: type[Generator], injector_class: Injector = Injector()):
+    injector = injector_class.initialize(shader_type)
     
     lexer = Lexer(injector.source_inject(source))
     tokens = lexer.tokenize()

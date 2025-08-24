@@ -2,9 +2,9 @@ from fbusl.node import *
 from fbusl import ShaderType
 
 class Injector:
-    def __init__(self, shader_type: ShaderType):
+    def initialize(self, shader_type: ShaderType):
         self.shader_type = shader_type
-    
+            
     def get_builtins(self) -> dict:
         return {}
 
