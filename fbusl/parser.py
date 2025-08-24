@@ -501,7 +501,7 @@ class Parser:
             return Literal(int(tok.value), pos=tok.pos)
         elif tok.kind == TokenType.FLOAT:
             return Literal(float(tok.value), pos=tok.pos)
-        elif tok.kind == TokenType.KEYWORD and tok.value in ["True", "False"]:
+        elif tok.kind == TokenType.BOOL and tok.value in ["True", "False"]:
             return Literal(tok.value == "True", pos=tok.pos)
         else:
             fbusl_error(f"Invalid literal: {tok.value}", tok.pos)
