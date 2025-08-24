@@ -4,6 +4,7 @@ from itertools import product
 
 from itertools import product
 
+
 def generate_overloads_with_cost(param_slots, allowed_types_map, max_cost=1):
     overloads = []
     type_list = list(allowed_types_map.keys())
@@ -16,12 +17,15 @@ def generate_overloads_with_cost(param_slots, allowed_types_map, max_cost=1):
 
             if cost == max_cost:
                 params = dict(zip(slots_subset, combo))
-                overloads.append({
-                    "params": params,
-                    "cost": cost,
-                })
+                overloads.append(
+                    {
+                        "params": params,
+                        "cost": cost,
+                    }
+                )
 
     return overloads
+
 
 TYPES = {
     "int": {
@@ -235,7 +239,10 @@ BUILTINS = {
         "sample": {
             "kind": "function",
             "return": "vec4",
-            "params": {"tex": "texture", "sample_position": "vec2"},
+            "overloads": [
+                {"tex": "texture", "sample_position": "vec2"},
+                {"tex": "texture", "index": "int", "sample_position": "vec2"},
+            ],
         },
     },
     ShaderType.VERTEX: {"VERTEX_POSITION": {"type": "vec4", "kind": "output"}},

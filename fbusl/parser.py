@@ -419,7 +419,7 @@ class Parser:
                 )
 
             else:
-                name = self.expect(TokenType.IDENT)
+                name = self.expect(TokenType.IDENT).value
 
                 self.expect(TokenType.OPERATOR, "=")
 
@@ -501,8 +501,8 @@ class Parser:
             return Literal(int(tok.value), pos=tok.pos)
         elif tok.kind == TokenType.FLOAT:
             return Literal(float(tok.value), pos=tok.pos)
-        elif tok.kind == TokenType.KEYWORD and tok.value in ["true", "false"]:
-            return Literal(tok.value == "true", pos=tok.pos)
+        elif tok.kind == TokenType.KEYWORD and tok.value in ["True", "False"]:
+            return Literal(tok.value == "True", pos=tok.pos)
         else:
             fbusl_error(f"Invalid literal: {tok.value}", tok.pos)
 

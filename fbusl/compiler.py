@@ -26,7 +26,3 @@ def compile(source, shader_type: ShaderType):
 
     generator = Generator(tree)
     return generator.generate()
-
-if __name__ == "__main__":
-    source = open('test.fbvert').read()
-    compile(source, ShaderType.VERTEX)
