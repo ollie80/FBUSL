@@ -14,9 +14,6 @@ def compile(source, shader_type: ShaderType, generator_class: type[Generator]):
 
     parser = Parser(tokens)
     tree = parser.parse()
-    print(tree)
-    sys.exit()
-
 
     semantics = SemanticAnalyser(tree, shader_type)
     semantics.analyse()
