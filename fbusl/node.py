@@ -235,12 +235,13 @@ class Literal(ASTNode):
     def __init__(self, value: Union[int, float, bool], pos: Position = Position()):
         super().__init__(pos)
         self.value = value
-        if isinstance(value, int):
+        
+        if isinstance(value, bool):
+            self.type = "bool"
+        elif isinstance(value, int):
             self.type = "int"
         elif isinstance(value, float):
             self.type = "float"
-        elif isinstance(value, bool):
-            self.type = "bool"
 
     def __repr__(self):
         return f"Literal(value={self.value}, type={self.type}, pos={self.pos})"
