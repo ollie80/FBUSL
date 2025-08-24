@@ -49,7 +49,7 @@ class Scope:
 
 
 class SemanticAnalyser:
-    def __init__(self, tree: list[ASTNode], shader_type: ShaderType):
+    def __init__(self, tree: list[ASTNode], shader_type: ShaderType, extra_builtins = {}):
         self.tree = tree
         self.shader_type = shader_type
         self.global_scope = Scope()
@@ -58,10 +58,10 @@ class SemanticAnalyser:
         self.current_scope = self.global_scope
         self.functions = {}
 
-        self.define_builtins()
+        self.define_builtins(extra_builtins)
 
-    def define_builtins(self):
-        builtins: dict = BUILTINS.get("all") | BUILTINS.get(self.shader_type)
+    def define_builtins(self, extra):
+        builtins: dict = BUILTINS.get("all") | BUILTINS.get(self.shader_type, {}) | extra
 
         for builtin_name in builtins:
             builtin_data = builtins[builtin_name]

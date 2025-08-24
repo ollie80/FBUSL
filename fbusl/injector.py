@@ -1,9 +1,15 @@
 from fbusl.node import *
-
+from fbusl import ShaderType
 
 class Injector:
-    def __init__(self, tree: list[ASTNode]):
-        self.tree = tree
+    def __init__(self, shader_type: ShaderType):
+        self.shader_type = shader_type
+    
+    def get_builtins() -> dict:
+        return {}
 
-    def inject(self):
-        return self.tree
+    def ast_inject(self, tree: list[ASTNode]):
+        return tree
+
+    def source_inject(self, source: str) -> str:
+        return source
