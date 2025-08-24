@@ -182,6 +182,7 @@ BUILTINS = {
     "all": {
         "round": {"return": "int", "params": {"x": "float"}, "kind": "function"},
         "float": {"return": "float", "params": {"x": "int"}, "kind": "function"},
+        "int": {"return": "int", "params": {"x": "float"}, "kind": "function"},
         "vec2": {
             "return": "vec2",
             "kind": "function",
