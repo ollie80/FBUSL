@@ -8,7 +8,7 @@ from enum import Enum, auto
 from fbusl import ShaderType, FBUSLError
 
 
-def compile(source, shader_type: ShaderType):
+def compile(source, shader_type: ShaderType, generator_class: type[Generator]):
     lexer = Lexer(source)
     tokens = lexer.tokenize()
 
@@ -24,5 +24,5 @@ def compile(source, shader_type: ShaderType):
     optimizer = Optimizer(tree)
     tree = optimizer.optimize()
 
-    generator = Generator(tree)
+    generator = generator_class(tree)
     return generator.generate()
