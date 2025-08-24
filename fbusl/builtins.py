@@ -240,8 +240,8 @@ BUILTINS = {
             "kind": "function",
             "return": "vec4",
             "overloads": [
-                {"tex": "texture", "sample_position": "vec2"},
-                {"tex": "texture", "index": "int", "sample_position": "vec2"},
+                {"params": {"tex": "texture", "sample_position": "vec2"}},
+                {"params": {"tex": "texture", "index": "int", "sample_position": "vec2"}},
             ],
         },
     },

@@ -163,6 +163,9 @@ class SemanticAnalyser:
         elif isinstance(node, UnaryOp):
             return self.get_node_type(node.operand)
 
+        elif isinstance(node, InlineIf):
+            return self.get_node_type(node.then_expr)
+
         elif isinstance(node, MemberAccess):
             base_type = self.get_type_name(self.get_node_type(node.base))
 
