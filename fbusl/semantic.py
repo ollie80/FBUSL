@@ -105,6 +105,8 @@ class SemanticAnalyser:
     def analyse(self):
         for node in self.tree:
             self.analyse_node(node)
+        for node in self.tree:
+            self.set_node_types(node)
 
     def get_type_name(self, base_type: str | dict | None):
         if base_type is None:
@@ -141,6 +143,81 @@ class SemanticAnalyser:
 
         return result_type
 
+    def set_node_types(self, node: ASTNode) -> str:
+        if isinstance(node, VarDecl):
+            if node.value:
+                self.set_node_types(node.value)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Identifier):
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Literal):
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Setter):
+            self.set_node_types(node.node)
+            self.set_node_types(node.value)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, BinOp):
+            self.set_node_types(node.left)
+            self.set_node_types(node.right)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, UnaryOp):
+            self.set_node_types(node.operand)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, InlineIf):
+            self.set_node_types(node.condition)
+            self.set_node_types(node.then_expr)
+            self.set_node_types(node.else_expr)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, MemberAccess):
+            self.set_node_types(node.base)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, FuncCall):
+            for arg in node.args:
+                self.set_node_types(arg)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, StructDef):
+            for field in node.fields:
+                self.set_node_types(field)
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, FunctionDef):
+            self.enter_scope()
+            for param in node.params:
+                self.set_node_types(param)
+            for stmt in node.body:
+                self.set_node_types(stmt)
+            self.exit_scope()
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Output):
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Input):
+            node.type = self.get_node_type(node)
+
+        elif isinstance(node, Uniform):
+            node.type = self.get_node_type(node)
+
+        elif hasattr(node, "children"):
+            for child in node.children:
+                self.set_node_types(child)
+            node.type = self.get_node_type(node)
+
+        else:
+            node.type = self.get_node_type(node)
+
+        return node.type
+
+
     def get_node_type(self, node: ASTNode) -> str:
         if isinstance(node, VarDecl):
             return self.get_type_name(node.type)
@@ -149,7 +226,6 @@ class SemanticAnalyser:
             var = self.current_scope.lookup(node.value, node.pos)
             if var:
                 return self.get_type_name(var["type"])
-            
 
         elif isinstance(node, Literal):
             return self.get_type_name(node.type)

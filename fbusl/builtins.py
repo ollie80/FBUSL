@@ -172,6 +172,7 @@ TYPES = {
         "operations": {"*": {"float": "mat4", "vec4": "vec4", "mat4": "mat4"}},
     },
     "texture": {},
+    "textureStack": {},
     "array": {
         "data": {"base_type": str, "length": int},
         "operations": {"[]": lambda array_type: array_type["data"]["base_type"]},
@@ -242,7 +243,7 @@ BUILTINS = {
             "return": "vec4",
             "overloads": [
                 {"params": {"tex": "texture", "sample_position": "vec2"}},
-                {"params": {"tex": "texture", "index": "int", "sample_position": "vec2"}},
+                {"params": {"tex": "textureStack", "index": "int", "sample_position": "vec2"}},
             ],
         },
     },
