@@ -28,6 +28,7 @@ def generate_overloads_with_cost(param_slots, allowed_types_map, max_cost=1):
 
 
 TYPES = {
+    "void": {"operations": {}},
     "int": {
         "operations": {
             "+": {"int": "int"},
@@ -184,6 +185,10 @@ BUILTINS = {
         "round": {"return": "int", "params": {"x": "float"}, "kind": "function"},
         "float": {"return": "float", "params": {"x": "int"}, "kind": "function"},
         "int": {"return": "int", "params": {"x": "float"}, "kind": "function"},
+        "sin": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+        "cos": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+        "tan": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+        "sign": {"return": "float", "params": {"x": "float"}, "kind": "function"},
         "vec2": {
             "return": "vec2",
             "kind": "function",
@@ -246,6 +251,11 @@ BUILTINS = {
                 {"params": {"tex": "textureStack", "index": "int", "sample_position": "vec2"}},
             ],
         },
+        "TIME": {
+            "kind": "uniform",
+            "type": "float"
+        }
     },
     ShaderType.VERTEX: {"VERTEX_POSITION": {"type": "vec4", "kind": "output"}},
+    ShaderType.VERTEX: {"VERTEX_INDEX": {"type": "int", "kind": "input"}},
 }

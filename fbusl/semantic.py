@@ -3,7 +3,6 @@ from fbusl.builtins import TYPES, BUILTINS
 from fbusl import fbusl_error, Position
 from fbusl import ShaderType
 
-
 class Scope:
     def __init__(self, parent: "Scope" = None):
         self.parent = parent
@@ -46,7 +45,6 @@ class Scope:
             return self.parent.lookup(name, pos)
         else:
             fbusl_error(f"Variable '{name}' not defiened in current scope.", pos)
-
 
 class SemanticAnalyser:
     def __init__(self, tree: list[ASTNode], shader_type: ShaderType, extra_builtins = {}):
@@ -120,27 +118,28 @@ class SemanticAnalyser:
     ) -> str:
         left_type = self.get_node_type(left)
         right_type = self.get_node_type(right)
-
         left_def = self.types.get(left_type)
+
         if not left_def:
             fbusl_error(f"Unknown type '{left_type}' in binary operation", pos)
-
+            
         operations = left_def.get("operations", {})
         rules = operations.get(op)
-
+        
         if not rules:
             fbusl_error(
                 f"Type '{left_type}' does not support operator '{op}'",
                 pos,
-            )
+           )
 
         result_type = rules.get(right_type)
+
         if not result_type:
             fbusl_error(
                 f"Operator '{op}' not supported between '{left_type}' and '{right_type}'",
                 pos,
-            )
-
+            )        
+    
         return result_type
 
     def set_node_types(self, node: ASTNode) -> str:
@@ -191,119 +190,175 @@ class SemanticAnalyser:
 
         elif isinstance(node, FunctionDef):
             self.enter_scope()
+
             for param in node.params:
+            
                 self.set_node_types(param)
+            
             for stmt in node.body:
+            
                 self.set_node_types(stmt)
+            
             self.exit_scope()
+            
             node.type = self.get_node_type(node)
 
         elif isinstance(node, Output):
+            
             node.type = self.get_node_type(node)
 
         elif isinstance(node, Input):
+            
             node.type = self.get_node_type(node)
 
         elif isinstance(node, Uniform):
+            
             node.type = self.get_node_type(node)
 
         elif hasattr(node, "children"):
+            
             for child in node.children:
+            
                 self.set_node_types(child)
+            
             node.type = self.get_node_type(node)
 
         else:
-            node.type = self.get_node_type(node)
+        
+            node.type = self.get_node_type(node.child)
 
         return node.type
 
-
     def get_node_type(self, node: ASTNode) -> str:
+        
         if isinstance(node, VarDecl):
+        
             return self.get_type_name(node.type)
 
         elif isinstance(node, Identifier):
+        
             var = self.current_scope.lookup(node.value, node.pos)
+            
             if var:
+        
                 return self.get_type_name(var["type"])
 
         elif isinstance(node, Literal):
+        
             return self.get_type_name(node.type)
 
         elif isinstance(node, Setter):
+        
             return self.get_node_type(node.value)
 
         elif isinstance(node, BinOp):
+        
             return self.get_binop_type(node.op, node.left, node.right, node.pos)
 
         elif isinstance(node, UnaryOp):
+        
             return self.get_node_type(node.operand)
 
         elif isinstance(node, InlineIf):
+        
             return self.get_node_type(node.then_expr)
 
         elif isinstance(node, MemberAccess):
+        
             base_type = self.get_type_name(self.get_node_type(node.base))
 
             struct_def = self.types.get(base_type)
+        
             if struct_def:
+        
                 field_type = struct_def.get("fields", {}).get(node.member)
+        
                 if field_type is None:
+        
                     fbusl_error(
+        
                         f"Struct '{base_type}' has no member '{node.member}'",
+        
                         node.pos,
+        
                     )
+        
                 return self.get_type_name(field_type)
 
             fbusl_error(
+        
                 f"Cannot access member '{node.member}' on type '{base_type}'",
+        
                 node.pos,
+        
             )
 
         elif isinstance(node, FuncCall):
+        
             fn = self.functions.get(node.name)
+            
             if not fn:
+            
                 fbusl_error(f"Function '{node.name}' not defined", node.pos)
+            
                 return
+            
             return self.get_type_name(fn["type"])
 
         elif isinstance(node, StructDef):
+        
             return node.name
 
+        elif isinstance(node, ArrayAccess):
+        
+            return self.get_node_type(node.base) 
+
         elif hasattr(node, "type"):
+        
             return self.get_type_name(node.type)
 
         return "unknown"
 
     def type_match(self, t1: str, t2: str):
+        
         return t1 == t2
 
     def analyse_node(self, node: ASTNode):
+        
         if isinstance(node, Output):
+        
             self.analyse_output(node)
 
         elif isinstance(node, Input):
+        
             self.analyse_input(node)
 
         elif isinstance(node, Uniform):
+        
             self.analyse_uniform(node)
 
         elif isinstance(node, VarDecl):
+        
             self.analyse_var_decl(node)
 
         elif isinstance(node, StructDef):
+        
             self.analyse_struct_def(node)
 
         elif isinstance(node, Setter):
+        
             self.analyse_setter(node)
 
         elif isinstance(node, FunctionDef):
+        
             self.analyse_function_def(node)
 
         elif isinstance(node, FuncCall):
+        
             self.analyse_function_call(node)
 
         for child in getattr(node, "children", []):
+        
             self.analyse_node(child)
 
     def analyse_var_decl(self, node: VarDecl):
@@ -346,7 +401,7 @@ class SemanticAnalyser:
     def analyse_function_def(self, node: FunctionDef):
         params = {param.name: param.type for param in node.params}
         self.define_function(node.name, node.type, params, {}, node.pos)
-
+        
         self.enter_scope()
 
         for node in node.body:
@@ -371,7 +426,6 @@ class SemanticAnalyser:
                 return found
 
         return None
-
 
     def analyse_function_call(self, node: FuncCall):
         function = self.functions.get(node.name)

@@ -3,7 +3,7 @@ from fbusl import ShaderType
 
 class Injector:
     def initialize(self, shader_type: ShaderType):
-        self.shader_type = shader_type
+        self.shader_type = shader_type 
             
     def get_builtins(self) -> dict:
         return {}
@@ -12,4 +12,4 @@ class Injector:
         return tree
 
     def source_inject(self, source: str) -> str:
-        return source
+        return source 

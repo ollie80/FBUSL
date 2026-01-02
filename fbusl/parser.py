@@ -16,26 +16,27 @@ class Token:
     def __repr__(self):
         return f"Token({self.kind}, {repr(self.value)})"
 
+
 class TokenType(Enum):
-    ARROW = auto()
-    DECORATOR = auto()
-    QUALIFIER = auto()
-    KEYWORD = auto()
-    IDENT = auto()
-    FLOAT = auto()
     INT = auto()
     BOOL = auto()
+    ARROW = auto()
+    IDENT = auto()
+    FLOAT = auto()
     SYMBOL = auto()
-    OPERATOR = auto()
-    WHITESPACE = auto()
-    NEWLINE = auto()
-    COMMENT = auto()
     INDENT = auto()
     DEDENT = auto()
+    NEWLINE = auto()
+    KEYWORD = auto()
+    COMMENT = auto()
+    OPERATOR = auto()
+    DECORATOR = auto()
+    QUALIFIER = auto()
+    WHITESPACE = auto()
 
 TOKEN_TYPES = [
-    (TokenType.NEWLINE, r"\n"),  # newlines first
-    (TokenType.WHITESPACE, r"[ \t]+"),  # only spaces and tabs
+    (TokenType.NEWLINE, r"\n"), # newlines first
+    (TokenType.WHITESPACE, r"[ \t]+"), # only spaces and tabs
     (TokenType.ARROW, r"->"),
     (TokenType.DECORATOR, r"@(?:uniform|input|output|define)"),
     (TokenType.QUALIFIER, r"(low|med|flat|high)"),
@@ -49,15 +50,17 @@ TOKEN_TYPES = [
     (TokenType.COMMENT, r"#.*")
 ]
 
+
 TOKEN_REGEX = [(kind, re.compile(pattern)) for kind, pattern in TOKEN_TYPES]
+
 
 class Lexer:
     def __init__(self, code: str, filename: str = None):
         self.code = code
         self.filename = filename
-        self.pos = 0                 # absolute offset
-        self.line = 1                # 1-based line number
-        self.column = 0              # 0-based column within line
+        self.pos = 0 # absolute offset
+        self.line = 1 # 1-based line number
+        self.column = 0 # 0-based column within line
         self.length = len(code)
         self.indents = [0]
         self._pending_tokens: List[Token] = []

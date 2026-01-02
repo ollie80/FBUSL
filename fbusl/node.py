@@ -245,8 +245,7 @@ class Literal(ASTNode):
 
     def __repr__(self):
         return f"Literal(value={self.value}, type={self.type}, pos={self.pos})"
-
-
+    
 class Identifier(ASTNode):
     def __init__(self, name: str, pos: Position = Position()):
         super().__init__(pos)

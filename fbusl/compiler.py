@@ -24,6 +24,5 @@ def compile(source, shader_type: ShaderType, generator_class: type[Generator], i
     optimizer = Optimizer(tree)
     tree = optimizer.optimize()
 
-
     generator = generator_class(tree)
     return generator.generate()
