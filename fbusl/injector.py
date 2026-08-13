@@ -12,4 +12,4 @@ class Injector:
         return tree
 
     def source_inject(self, source: str) -> str:
-        return source 
+        return source

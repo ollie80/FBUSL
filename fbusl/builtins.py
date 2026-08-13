@@ -256,6 +256,5 @@ BUILTINS = {
             "type": "float"
         }
     },
-    ShaderType.VERTEX: {"VERTEX_POSITION": {"type": "vec4", "kind": "output"}},
-    ShaderType.VERTEX: {"VERTEX_INDEX": {"type": "int", "kind": "input"}},
+    ShaderType.VERTEX: {"VERTEX_POSITION": {"type": "vec2", "kind": "output"}, "VERTEX_INDEX": {"type": "int", "kind": "input"}}
 }

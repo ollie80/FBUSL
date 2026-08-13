@@ -33,6 +33,7 @@ class FBUSLError:
 
 
 _FBUSL_errors: list[FBUSLError] = []
+ERRORS_FATAL = True
 
 
 def get_errors() -> list[FBUSLError]:
@@ -59,6 +60,8 @@ def fbusl_error(msg, position: Position = Position()):
         f = "Unkown File"
 
     print(f'\033[91mFBUSL ERROR: {msg} in file "{f}", line {position.line}.\033[0m')
+    if ERRORS_FATAL:
+        sys.exit()
     _add_error(FBUSLError(msg, position))
 
 
@@ -76,6 +79,5 @@ from fbusl import builtins
 from fbusl import injector
 from fbusl import node
 from fbusl.compiler import compile
-
 
 __all__ = ["fbusl_error", "ShaderType", "Position", "injector", "builtins", "node", "parser", "generator", "compile", "optimizer", "semantic"]

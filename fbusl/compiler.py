@@ -7,12 +7,17 @@ from typing import Literal
 import sys
 from enum import Enum, auto
 from fbusl import ShaderType, FBUSLError
+from FreeBodyEngine.core.files.resource import FileResource
 
 
 def compile(source, shader_type: ShaderType, generator_class: type[Generator], injector: Injector = Injector()):
     injector.initialize(shader_type)
-    
-    lexer = Lexer(injector.source_inject(source))
+    if not isinstance(source, str):
+        path = source.file_path
+        source = source.read()
+    else:
+        path = None
+    lexer = Lexer(injector.source_inject(source), path)
     tokens = lexer.tokenize()
 
     parser = Parser(tokens)
@@ -25,4 +30,6 @@ def compile(source, shader_type: ShaderType, generator_class: type[Generator], i
     tree = optimizer.optimize()
 
     generator = generator_class(tree)
-    return generator.generate()
+    output = generator.generate()
+    print(output)
+    return output 

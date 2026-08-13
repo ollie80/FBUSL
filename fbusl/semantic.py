@@ -143,6 +143,8 @@ class SemanticAnalyser:
         return result_type
 
     def set_node_types(self, node: ASTNode) -> str:
+        if node == None:
+            return
         if isinstance(node, VarDecl):
             if node.value:
                 self.set_node_types(node.value)
@@ -216,21 +218,21 @@ class SemanticAnalyser:
             node.type = self.get_node_type(node)
 
         elif hasattr(node, "children"):
-            
+            print(f"Node with children: {node}")
+            print(None in node.children)
             for child in node.children:
-            
+                print(child)
                 self.set_node_types(child)
-            
+
             node.type = self.get_node_type(node)
 
-        else:
-        
+        elif hasattr(node, "child"): 
             node.type = self.get_node_type(node.child)
 
         return node.type
 
     def get_node_type(self, node: ASTNode) -> str:
-        
+
         if isinstance(node, VarDecl):
         
             return self.get_type_name(node.type)
