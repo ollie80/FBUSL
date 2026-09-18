@@ -32,6 +32,22 @@ class FBUSLError:
         self.position = position
 
 
+class FBUSLCompileError(Exception):
+    """Raised by `fbusl_error` when `ERRORS_FATAL` is set (the default).
+
+    Previously a compile error called `sys.exit()` directly - which, since
+    `SystemExit` isn't even an `Exception` subclass, meant an engine embedding
+    fbusl had no way to catch a shader compile error at all: the whole process
+    would just terminate with no traceback. Raising a real exception here lets
+    a caller (an editor, a hot-reload path, a material load) catch this and
+    report it without killing the process, while still failing loudly by
+    default if nothing catches it.
+    """
+    def __init__(self, err: FBUSLError):
+        self.err = err
+        super().__init__(err.msg)
+
+
 _FBUSL_errors: list[FBUSLError] = []
 ERRORS_FATAL = True
 
@@ -60,9 +76,12 @@ def fbusl_error(msg, position: Position = Position()):
         f = "Unkown File"
 
     print(f'\033[91mFBUSL ERROR: {msg} in file "{f}", line {position.line}.\033[0m')
+
+    err = FBUSLError(msg, position)
+    _add_error(err)
+
     if ERRORS_FATAL:
-        sys.exit()
-    _add_error(FBUSLError(msg, position))
+        raise FBUSLCompileError(err)
 
 
 class ShaderType:
@@ -70,6 +89,7 @@ class ShaderType:
     FRAGMENT = "fragment"
     COMPUTE = "compute"
     GEOMETRY = "geometry"
+    RAYTRACE = "raytrace"
 
 from fbusl import semantic
 from fbusl import optimizer
@@ -80,4 +100,4 @@ from fbusl import injector
 from fbusl import node
 from fbusl.compiler import compile
 
-__all__ = ["fbusl_error", "ShaderType", "Position", "injector", "builtins", "node", "parser", "generator", "compile", "optimizer", "semantic"]
+__all__ = ["fbusl_error", "FBUSLError", "FBUSLCompileError", "ShaderType", "Position", "injector", "builtins", "node", "parser", "generator", "compile", "optimizer", "semantic"]

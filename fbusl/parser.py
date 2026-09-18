@@ -38,9 +38,14 @@ TOKEN_TYPES = [
     (TokenType.NEWLINE, r"\n"), # newlines first
     (TokenType.WHITESPACE, r"[ \t]+"), # only spaces and tabs
     (TokenType.ARROW, r"->"),
-    (TokenType.DECORATOR, r"@(?:uniform|input|output|define)"),
-    (TokenType.QUALIFIER, r"(low|med|flat|high)"),
-    (TokenType.KEYWORD, r"\b(def|return|struct|if|buffer|elif|else|not|and|or)\b"),
+    (TokenType.DECORATOR, r"@(?:uniform|input|output|define|compute|geometry|raytrace)"),
+    # Word-boundary anchored: without `\b`, this matched the first 3-4
+    # characters of any identifier merely *starting with* one of these
+    # words (e.g. "median" -> QUALIFIER("med") + IDENT("ian"), "highlight"
+    # -> QUALIFIER("high") + IDENT("light")) since regex matching isn't
+    # anchored to whole tokens - only to a starting position.
+    (TokenType.QUALIFIER, r"\b(low|med|flat|high)\b"),
+    (TokenType.KEYWORD, r"\b(def|return|struct|if|buffer|elif|else|while|shared|readonly|writeonly|readwrite|not|and|or)\b"),
     (TokenType.BOOL, r"(True|False)"),
     (TokenType.IDENT, r"[a-zA-Z_][a-zA-Z0-9_]*"),
     (TokenType.FLOAT, r"\d(?:_?\d)*\.\d(?:_?\d)*"),
@@ -52,6 +57,11 @@ TOKEN_TYPES = [
 
 
 TOKEN_REGEX = [(kind, re.compile(pattern)) for kind, pattern in TOKEN_TYPES]
+
+# Decorators that attach stage metadata to the `def` immediately following them
+# (@compute/@geometry/@raytrace), as opposed to @uniform/@input/@output/@define
+# which each introduce a block of standalone declarations.
+STAGE_DECORATORS = {"@compute", "@geometry", "@raytrace"}
 
 
 class Lexer:
@@ -95,7 +105,13 @@ class Lexer:
             while self.pos < self.length and self.code[self.pos] in " \t":
                 self.pos += 1
                 self.column += 1
-            indent = self.pos - start_pos
+
+            # Blank line or comment-only line: doesn't affect indentation tracking.
+            next_ch = self.code[self.pos] if self.pos < self.length else ""
+            if next_ch in ("\n", "#", ""):
+                return self.next_token()
+
+            indent = len(self.code[start_pos:self.pos].expandtabs())
             last_indent = self.indents[-1]
 
             if indent > last_indent:
@@ -200,10 +216,20 @@ class Parser:
         return tok.pos
 
     def parse(self):
-        last_tokens: list[Token] = []
         ast: list[ASTNode] = []
+        stall_count = 0
 
         while self.position < len(self.tokens):
+            # Guards against a genuine parser bug (parse_next() returning a
+            # node without actually consuming any tokens, which would spin
+            # forever since the loop condition never changes) - keyed off
+            # whether `self.position` itself advanced, not off the *kind* of
+            # token each top-level node happened to start with. That
+            # previous approach mistook any 5 consecutive top-level
+            # declarations of the same kind (5 `def`s, 5 `buffer`s, ...) -
+            # completely ordinary in a real shader with several helper
+            # functions - for an infinite loop and aborted compilation.
+            pos_before = self.position
             token = self.peek()
             node = self.parse_next()
 
@@ -216,27 +242,19 @@ class Parser:
             else:
                 ast.append(node)
 
-            last_tokens.append(token)
-
-            if len(last_tokens) > self.max_repeat_tokens:
-                last_tokens.pop(0)
-
-            if len(last_tokens) > self.max_repeat_tokens and all(
-                tok.kind == token.kind and tok.value == token.value
-                for tok in last_tokens
-            ):
-                fbusl_error(
-                    f"Too many repeats of token: {token}", self.get_current_pos()
-                )
+            if self.position == pos_before:
+                stall_count += 1
+                if stall_count >= self.max_repeat_tokens:
+                    fbusl_error(
+                        f"Parser made no progress at token: {token}", self.get_current_pos()
+                    )
+            else:
+                stall_count = 0
 
         return ast
 
     def parse_next(self):
         token = self.peek()
-
-        if token.kind == TokenType.KEYWORD:
-            if token.value == "def":
-                pass
 
         if token.kind == TokenType.DECORATOR:
             return self.parse_decorator()
@@ -248,6 +266,14 @@ class Parser:
                 return self.parse_struct_def()
             if token.value in {"if", "else", 'elif'}:
                 return self.parse_if_statement()
+            if token.value == "while":
+                return self.parse_while_statement()
+            if token.value in {"buffer", "readonly", "writeonly", "readwrite"}:
+                return self.parse_buffer_def()
+            if token.value == "shared":
+                return self.parse_shared_decl()
+            if token.value == "return":
+                return self.parse_return_statement()
 
         if token.kind == TokenType.IDENT:
             return self.parse_identifier()
@@ -273,7 +299,26 @@ class Parser:
 
         body = []
         while self.peek().kind != TokenType.DEDENT:
-            body.append(self.parse_next())
+            #
+            # parse_next() returns None (without consuming anything)
+            # for any token it doesn't recognize as the start of a
+            # statement - including the synthetic "EOF" token peek()
+            # returns once the token stream runs out. Without the
+            # consume()-on-None guard below, hitting one of those
+            # tokens here just re-parses the same token forever:
+            # self.position never advances, parse_next() never raises
+            # an error for an "unhandled" (as opposed to genuinely
+            # invalid) token, so this hangs with no output at all.
+            # parse_function_def's body loop already guards against
+            # this - this loop needs the same guard.
+            #
+            node = self.parse_next()
+            if node is None:
+                self.consume()
+                continue
+
+            body.append(node)
+
             if self.peek().kind == TokenType.NEWLINE:
                 self.consume()
 
@@ -284,6 +329,37 @@ class Parser:
             next_clause = self.parse_if_statement()
 
         return IfStatement(condition, kw, body, next_clause, pos)
+
+    def parse_while_statement(self) -> WhileStatement:
+        pos = self.get_current_pos()
+        self.expect(TokenType.KEYWORD, "while")
+
+        if self.peek().value == "(":
+            self.consume()
+            condition = self.parse_expression()
+            self.expect(TokenType.SYMBOL, ")")
+        else:
+            condition = self.parse_expression()
+
+        self.expect(TokenType.SYMBOL, ":")
+        self.expect(TokenType.NEWLINE)
+        self.expect(TokenType.INDENT)
+
+        body = []
+        while self.peek().kind != TokenType.DEDENT:
+            node = self.parse_next()
+            if node is None:
+                self.consume()
+                continue
+
+            body.append(node)
+
+            if self.peek().kind == TokenType.NEWLINE:
+                self.consume()
+
+        self.expect(TokenType.DEDENT)
+
+        return WhileStatement(condition, body, pos)
 
     def parse_inline_if(self):
         then_expr = self.parse_expression()
@@ -330,7 +406,7 @@ class Parser:
             if not first:
                 self.expect(TokenType.SYMBOL, ",")
 
-            param_name = self.expect(TokenType.IDENT)
+            param_name = self.expect(TokenType.IDENT).value
             param_type, param_qualifier = self.parse_type_and_qualifier()
 
             if param_qualifier not in ["in", "inout", "out", None]:
@@ -344,7 +420,7 @@ class Parser:
             )
 
             first = False
-
+        
         self.expect(TokenType.SYMBOL, ")")
 
         return_type = None
@@ -399,8 +475,56 @@ class Parser:
 
         return StructDef(name, fields, position)
 
+    def parse_buffer_def(self) -> BufferBlock:
+        position = self.get_current_pos()
+
+        qualifier = "readonly"
+        if self.peek().kind == TokenType.KEYWORD and self.peek().value in ("readonly", "writeonly", "readwrite"):
+            qualifier = self.consume().value
+
+        self.expect(TokenType.KEYWORD, 'buffer')
+        name = self.expect(TokenType.IDENT).value
+        self.expect(TokenType.SYMBOL, ':')
+        self.expect(TokenType.NEWLINE)
+        self.expect(TokenType.INDENT)
+
+        fields = []
+        while self.peek().kind != TokenType.DEDENT:
+            field_position = self.get_current_pos()
+            field_name = self.expect(TokenType.IDENT).value
+            field_type, _ = self.parse_type_and_qualifier()
+
+            fields.append(BufferField(field_name, field_type, field_position))
+
+            self.expect(TokenType.NEWLINE)
+
+        self.expect(TokenType.DEDENT)
+
+        return BufferBlock(name, fields, qualifier, position)
+
+    def parse_shared_decl(self) -> SharedDecl:
+        position = self.get_current_pos()
+        self.expect(TokenType.KEYWORD, 'shared')
+        name = self.expect(TokenType.IDENT).value
+        var_type, _ = self.parse_type_and_qualifier()
+        return SharedDecl(name, var_type, position)
+
+    def parse_return_statement(self) -> Return:
+        position = self.get_current_pos()
+        self.expect(TokenType.KEYWORD, 'return')
+
+        expression = None
+        if self.peek().kind != TokenType.NEWLINE:
+            expression = self.parse_expression()
+
+        return Return(expression, position)
+
     def parse_decorator(self) -> ASTNode:
         decorator_type = self.expect(TokenType.DECORATOR).value
+
+        if decorator_type in STAGE_DECORATORS:
+            return self.parse_stage_decorator(decorator_type)
+
         self.expect(TokenType.NEWLINE)
 
         decorators = []
@@ -433,6 +557,47 @@ class Parser:
             self.expect(TokenType.NEWLINE)
 
         return decorators
+
+    def parse_stage_decorator(self, decorator_type: str) -> FunctionDef:
+        """Parses `@compute(...)`/`@geometry(...)`/`@raytrace(...)`, an optional
+        `(key=value, ...)` argument list immediately followed by the `def` it
+        decorates. Returns that `FunctionDef` with `.stage`/`.stage_args` set,
+        rather than a list of standalone declarations like the other decorators
+        - `Parser.parse()` already accepts either shape from `parse_next()`.
+        """
+        args: dict = {}
+
+        if self.peek().kind == TokenType.SYMBOL and self.peek().value == "(":
+            self.consume()
+
+            while self.peek().value != ")":
+                key = self.expect(TokenType.IDENT).value
+                self.expect(TokenType.OPERATOR, "=")
+
+                if self.peek().kind == TokenType.IDENT:
+                    value = self.consume().value
+                else:
+                    value = self.parse_literal().value
+
+                args[key] = value
+
+                if self.peek().kind == TokenType.SYMBOL and self.peek().value == ",":
+                    self.consume()
+
+            self.expect(TokenType.SYMBOL, ")")
+
+        self.expect(TokenType.NEWLINE)
+
+        if not (self.peek().kind == TokenType.KEYWORD and self.peek().value == "def"):
+            fbusl_error(
+                f"'{decorator_type}' must directly precede a function definition",
+                self.get_current_pos(),
+            )
+
+        func = self.parse_function_def()
+        func.stage = decorator_type[1:]
+        func.stage_args = args
+        return func
 
     def parse_type_and_qualifier(self) -> tuple[dict, str | None]:
         self.expect(TokenType.SYMBOL, ":")

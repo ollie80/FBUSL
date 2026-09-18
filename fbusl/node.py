@@ -20,7 +20,7 @@ class ASTNode:
         return f"{self.__class__.__name__}(pos={self.pos})"
 
 class FunctionDef(ASTNode):
-    def __init__(self, name: str, body: List[ASTNode], return_type: str, params: List['FunctionParam'], overloads: Optional[List['FunctionParam']] = [], pos: Position = Position()):
+    def __init__(self, name: str, body: List[ASTNode], return_type: str, params: List['FunctionParam'], overloads: Optional[List['FunctionParam']] = [], pos: Position = Position(), stage: Optional[str] = None, stage_args: Optional[dict] = None):
         super().__init__(pos)
         self.name = name
         self.type = return_type
@@ -29,6 +29,13 @@ class FunctionDef(ASTNode):
         for node in self.body:
             self.add_child(node)
         self.overloads: List[Dict] = overloads
+        # Set when this function is the entry point of a @compute/@geometry/
+        # @raytrace stage decorator (None for an ordinary vertex/fragment
+        # `def`). `stage_args` holds the decorator's parsed (key=value, ...)
+        # arguments (e.g. {"local_size_x": 8}), backend-agnostic metadata that
+        # a Generator subclass reads to emit the right stage-specific GLSL.
+        self.stage: Optional[str] = stage
+        self.stage_args: dict = stage_args or {}
 
     def __repr__(self):
         return (f"FunctionDef(name={self.name}, return_type={self.type}, params={self.params}, body={self.body}, overloads={self.overloads}, pos={self.pos})")
@@ -57,6 +64,45 @@ class StructField(ASTNode):
 
     def __repr__(self):
         return f"Field(name={self.name}, type={self.type})"
+
+
+class BufferField(StructField):
+    """Same shape as StructField - a distinct name only for readability at
+    `buffer` block declaration sites."""
+    pass
+
+
+class BufferBlock(ASTNode):
+    """A `buffer Name:` block: a struct-array declaration backed by whatever
+    read/write storage mechanism a backend actually has (a GL33 buffer
+    texture, a real SSBO on a future compute backend, ...). `qualifier` is a
+    real GLSL-style memory qualifier ("readonly"/"writeonly"/"readwrite") -
+    FBUSL itself allows all three; it's a backend `Generator`'s declared
+    capabilities that decide which ones it can actually lower (see
+    `fbusl.generator.Generator.CAPABILITIES`)."""
+    def __init__(self, name: str, fields: list['BufferField'], qualifier: str = "readonly", pos: Position = Position()):
+        super().__init__(pos)
+        self.name = name
+        self.fields = fields
+        self.qualifier = qualifier
+
+    def __repr__(self):
+        return f"BufferBlock(name={self.name}, fields={self.fields}, qualifier={self.qualifier}, pos={self.pos})"
+
+
+class SharedDecl(ASTNode):
+    """A `shared` (workgroup-local memory) variable declaration. Only
+    meaningful to a backend with real co-scheduled, communicating compute
+    invocations (`Generator.CAPABILITIES` capability "compute.shared_memory")
+    - a backend without it must reject this at codegen time rather than
+    silently drop the sharing semantics."""
+    def __init__(self, name: str, var_type: dict, pos: Position = Position()):
+        super().__init__(pos)
+        self.name = name
+        self.type = var_type
+
+    def __repr__(self):
+        return f"SharedDecl(name={self.name}, type={self.type}, pos={self.pos})"
 
 class VarDecl(ASTNode):
     def __init__(self, name: str, var_type: dict, value: Optional[ASTNode] = None, qualifier: str = None, pos: Position = Position()):
@@ -119,6 +165,8 @@ class Define(ASTNode):
         super().__init__(pos)
         self.name = name
         self.value = value
+        if value is not None:
+            self.add_child(value)
 
     def __repr__(self):
         return f"Define(name={self.name}, value={self.value}, pos={self.pos})"
@@ -136,6 +184,14 @@ class BinOp(ASTNode):
     def __repr__(self):
         return f'BinOp(op="{self.op}", left={self.left}, right={self.right}, pos={self.pos})'
 
+class Return(ASTNode):
+    def __init__(self, expression: ASTNode, pos: Position = Position()):
+        super().__init__(pos)
+        self.expression = expression
+        self.add_child(expression)
+
+    def __repr__(self):
+        return f"Return {self.expression}"
 
 class Condition(ASTNode):
     def __init__(self, comparison: str, left: ASTNode, right: ASTNode, pos: Position = Position()):
@@ -161,11 +217,24 @@ class IfStatement(ASTNode):
 
         self.if_type = if_type
         self.next_statement = next_statement
-        self.add_child(self.next_statement)
+        if self.next_statement is not None:
+            self.add_child(self.next_statement)
 
     def __repr__(self):
 
         return f"{self.if_type.capitalize()}Statement(condition={self.condition}, body={self.body},next={self.next_statement})"
+
+
+class WhileStatement(ASTNode):
+    def __init__(self, condition: ASTNode, body: list[ASTNode], pos: Position = Position()):
+        super().__init__(pos)
+        self.condition = condition
+        self.body = body
+        for node in self.body:
+            self.add_child(node)
+
+    def __repr__(self):
+        return f"WhileStatement(condition={self.condition}, body={self.body})"
 
 class InlineIf(ASTNode):
     def __init__(self, then_expr: ASTNode, condition: ASTNode, else_expr: ASTNode, pos: Position = Position()):

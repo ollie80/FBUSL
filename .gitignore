@@ -1,3 +1,7 @@
 /dist/
+/build/
 /fbusl.egg-info/
+/fbusl.zip
+__pycache__/
+*.pyc
 test.fbvert
