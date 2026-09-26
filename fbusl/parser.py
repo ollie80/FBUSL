@@ -66,6 +66,10 @@ STAGE_DECORATORS = {"@compute", "@geometry", "@raytrace"}
 
 class Lexer:
     def __init__(self, code: str, filename: str = None):
+        # Normalize CRLF/CR to LF - shaders checked out on Windows with
+        # core.autocrlf have "\r\n" endings, and "\r" isn't whitespace to
+        # the lexer.
+        code = code.replace("\r\n", "\n").replace("\r", "\n")
         self.code = code
         self.filename = filename
         self.pos = 0 # absolute offset
