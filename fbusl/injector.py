@@ -5,6 +5,27 @@ class Injector:
     def initialize(self, shader_type: ShaderType):
         self.shader_type = shader_type
 
+    def cache_key(self) -> str | None:
+        """What this injector does to the source, as a short string - or
+        None if it cannot be summarised.
+
+        A compiled shader can be cached and reused only if everything
+        that shaped it can be recognised again later, and an injector
+        rewrites both the source text and the AST before generation. So
+        a caller that caches compilation keys on this alongside the
+        source and the target.
+
+        The base injector changes nothing, so it has nothing to say and
+        returns the empty string. A subclass that rewrites anything MUST
+        override this: either with a string covering every input it
+        varies on, or with None to opt out of caching entirely. Returning
+        the inherited "" from a subclass that does rewrite things would
+        make two different shaders share one cache entry, so callers
+        treat an un-overridden cache_key() on a subclass as None rather
+        than trusting it.
+        """
+        return ""
+
     def get_builtins(self) -> dict:
         return {}
 
