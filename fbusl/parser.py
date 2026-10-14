@@ -51,7 +51,11 @@ TOKEN_TYPES = [
     (TokenType.FLOAT, r"\d(?:_?\d)*\.\d(?:_?\d)*"),
     (TokenType.INT, r"\d(?:_?\d)*"),
     (TokenType.SYMBOL, r"[{}()[\]:,\.]"),
-    (TokenType.OPERATOR, r"(\+=|==|!=|<=|>=|-=|\*=|/=|=|\+|-|\*|/|<|>)"),
+    # `<<`/`>>` before `<`/`>` (alternation is first-match, not longest).
+    # `%`, `&`, `|`, `^`, `<<` and `>>` were already in the precedence table
+    # and in `int`'s operations, but the lexer never produced them, so an
+    # integer hash or a modulo couldn't be written at all.
+    (TokenType.OPERATOR, r"(\+=|==|!=|<=|>=|-=|\*=|/=|<<|>>|=|\+|-|\*|/|%|<|>|&|\||\^)"),
     (TokenType.COMMENT, r"#.*")
 ]
 
@@ -289,13 +293,9 @@ class Parser:
         condition = None
 
         if kw in {"if", "elif"}:
-
-            if self.peek().value == "(":
-                self.consume()
-                condition = self.parse_expression()
-                self.expect(TokenType.SYMBOL, ")")
-            else:
-                condition = self.parse_expression()
+            # Parentheses are just part of the expression - special-casing
+            # a leading "(" took `(a - b) % 2 == 1` to end at the ")".
+            condition = self.parse_expression()
 
         self.expect(TokenType.SYMBOL, ":")
         self.expect(TokenType.NEWLINE)
@@ -337,13 +337,7 @@ class Parser:
     def parse_while_statement(self) -> WhileStatement:
         pos = self.get_current_pos()
         self.expect(TokenType.KEYWORD, "while")
-
-        if self.peek().value == "(":
-            self.consume()
-            condition = self.parse_expression()
-            self.expect(TokenType.SYMBOL, ")")
-        else:
-            condition = self.parse_expression()
+        condition = self.parse_expression()  # see parse_if_statement on parentheses
 
         self.expect(TokenType.SYMBOL, ":")
         self.expect(TokenType.NEWLINE)
@@ -411,7 +405,21 @@ class Parser:
                 self.expect(TokenType.SYMBOL, ",")
 
             param_name = self.expect(TokenType.IDENT).value
-            param_type, param_qualifier = self.parse_type_and_qualifier()
+
+            # `name: inout float` - in/out/inout lex as plain identifiers (they
+            # aren't reserved words anywhere else), so without this the
+            # qualifier was read as the type name and the real type became a
+            # syntax error: parameter qualifiers couldn't be written at all.
+            if (self.peek().kind == TokenType.SYMBOL and self.peek().value == ":"
+                    and self.position + 2 < len(self.tokens)
+                    and self.tokens[self.position + 1].kind == TokenType.IDENT
+                    and self.tokens[self.position + 1].value in ("in", "out", "inout")
+                    and self.tokens[self.position + 2].kind == TokenType.IDENT):
+                self.expect(TokenType.SYMBOL, ":")
+                param_qualifier = self.consume().value
+                param_type = self.parse_type()
+            else:
+                param_type, param_qualifier = self.parse_type_and_qualifier()
 
             if param_qualifier not in ["in", "inout", "out", None]:
                 fbusl_error(
@@ -642,7 +650,22 @@ class Parser:
                 expr = self.parse_expression()
                 node = Setter(node, expr, self.get_current_pos())
 
-            elif tok.kind == TokenType.SYMBOL and tok.value == ":":
+            # `x += y` is `x = x + y`. The target node appears on both sides
+            # of the desugared form, which is fine: generators treat it as an
+            # lvalue in one place and an rvalue in the other.
+            elif tok.kind == TokenType.OPERATOR and tok.value in ("+=", "-=", "*=", "/="):
+                self.consume()
+                expr = self.parse_expression()
+                pos = self.get_current_pos()
+                node = Setter(node, BinOp(node, tok.value[0], expr, pos), pos)
+
+            # `name: type` - but only when a type follows. A condition that
+            # ends in a variable (`while k < i:`) also has the block's `:`
+            # right after an identifier, and used to be parsed as the start
+            # of a declaration of `i`.
+            elif (tok.kind == TokenType.SYMBOL and tok.value == ":"
+                  and self.position + 1 < len(self.tokens)
+                  and self.tokens[self.position + 1].kind in (TokenType.IDENT, TokenType.QUALIFIER)):
                 return self.parse_var_decl(node.value)
 
             else:
@@ -725,20 +748,13 @@ class Parser:
     def parse_expression(self, precedence=0) -> ASTNode:
         left = self.parse_unary()
 
-        if self.peek().kind == TokenType.KEYWORD and self.peek().value == "if":
-            self.consume()
-            condition = self.parse_expression()
-
-            if self.peek().kind != TokenType.KEYWORD or self.peek().value != "else":
-                fbusl_error("Expected 'else' in inline if expression", self.get_current_pos())
-            self.consume()
-
-            else_expr = self.parse_expression()
-            return InlineIf(left, condition, else_expr)
-
         while True:
             tok = self.peek()
-            if tok.kind != TokenType.OPERATOR:
+            # `and`/`or` lex as keywords (so they can't be identifiers), but
+            # they're binary operators here - previously only OPERATOR tokens
+            # were considered, so `a and b` stopped parsing at `and`.
+            is_logical = tok.kind == TokenType.KEYWORD and tok.value in ("and", "or")
+            if tok.kind != TokenType.OPERATOR and not is_logical:
                 break
 
             op = tok.value
@@ -750,14 +766,36 @@ class Parser:
             right = self.parse_expression(op_prec + 1)
             left = BinOp(left, op, right)
 
+        # `a if cond else b` binds loosest of all, as in Python, so it's only
+        # formed at the top of an expression. It used to be checked right
+        # after the first operand at every level, which attached it to the
+        # innermost one: `p + n * 0.1 if c else q` parsed as
+        # `p + n * (0.1 if c else q)`.
+        if precedence == 0 and self.peek().kind == TokenType.KEYWORD and self.peek().value == "if":
+            self.consume()
+            condition = self.parse_expression(1)
+
+            if self.peek().kind != TokenType.KEYWORD or self.peek().value != "else":
+                fbusl_error("Expected 'else' in inline if expression", self.get_current_pos())
+            self.consume()
+
+            else_expr = self.parse_expression()
+            return InlineIf(left, condition, else_expr)
+
         return left
 
 
     def parse_unary(self) -> ASTNode:
         tok = self.peek()
-        if tok.kind == TokenType.OPERATOR and tok.value in ("+", "-", "not"):
+        # `not` is a KEYWORD token, not an OPERATOR one, so it has to be
+        # matched separately - the old check looked for an OPERATOR "not",
+        # which the lexer never produces.
+        is_not = tok.kind == TokenType.KEYWORD and tok.value == "not"
+        if (tok.kind == TokenType.OPERATOR and tok.value in ("+", "-")) or is_not:
             op = self.consume().value
-            operand = self.parse_unary()
+            # As in Python, `not` binds looser than comparisons but tighter
+            # than and/or: `not a < b` is `not (a < b)`.
+            operand = self.parse_expression(3) if is_not else self.parse_unary()
             return UnaryOp(op, operand, pos=tok.pos)
         else:
             return self.parse_primary()

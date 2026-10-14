@@ -52,11 +52,24 @@ TYPES = {
             ">=": {"int": "bool"},
         }
     },
+    # Wasn't a type at all: every comparison produced a "bool" that nothing
+    # could then be combined with - `a < b and c < d` failed with "Unknown
+    # type 'bool'" even once the parser accepted `and`.
+    "bool": {
+        "operations": {
+            "and": {"bool": "bool"},
+            "or": {"bool": "bool"},
+            "==": {"bool": "bool"},
+            "!=": {"bool": "bool"},
+        }
+    },
     "float": {
         "operations": {
             "+": {"float": "float"},
             "-": {"float": "float"},
-            "*": {"float": "float"},
+            # `2.0 * v` as well as `v * 2.0` - only the vector-on-the-left
+            # order used to type-check.
+            "*": {"float": "float", "vec2": "vec2", "vec3": "vec3", "vec4": "vec4"},
             "/": {"float": "float"},
             "-_unary": {"": "float"},
             "+_unary": {"": "float"},
@@ -199,11 +212,6 @@ TYPES = {
 BUILTINS = {
     "all": {
         "round": {"return": "int", "params": {"x": "float"}, "kind": "function"},
-        "abs": {
-    "return": "float",
-    "params": {"x": "float"},
-    "kind": "function",
-},
 "length": {
     "kind": "function",
     "return": "float",
@@ -288,6 +296,13 @@ BUILTINS = {
     ],
 },
 "cross": {"return": "vec3", "params": {"x": "vec3", "y": "vec3"}, "kind": "function"},
+"exp": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+"log": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+"acos": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+"asin": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+# Refraction for glass and water - `eta` is the ratio of indices of
+# refraction, and a zero vector comes back on total internal reflection.
+"refract": {"return": "vec3", "params": {"i": "vec3", "n": "vec3", "eta": "float"}, "kind": "function"},
 "normalize": {"return": "vec3", "params": {"x": "vec3"}, "kind": "function"},
 "reflect": {"return": "vec3", "params": {"i": "vec3", "n": "vec3"}, "kind": "function"},
 "max": {
@@ -402,8 +417,6 @@ BUILTINS = {
 }, 
         "float": {"return": "float", "params": {"x": "int"}, "kind": "function"},
         "int": {"return": "int", "params": {"x": "float"}, "kind": "function"},
-        "sin": {"return": "float", "params": {"x": "float"}, "kind": "function"},
-        "cos": {"return": "float", "params": {"x": "float"}, "kind": "function"},
         "tan": {"return": "float", "params": {"x": "float"}, "kind": "function"},
         "sign": {"return": "float", "params": {"x": "float"}, "kind": "function"},
         "vec2": {
@@ -550,7 +563,15 @@ BUILTINS[ShaderType.RAYTRACE] = {
     "ray_aabb": {"kind": "function", "return": "float", "params": {"ray": "Ray", "box_min": "vec3", "box_max": "vec3"}},
     "ray_triangle": {"kind": "function", "return": "vec4", "params": {"ray": "Ray", "v0": "vec3", "v1": "vec3", "v2": "vec3"}},
     "trace_ray": {"kind": "function", "return": "RayHit", "params": {"ray": "Ray"}, "requires": "raytrace.query"},
+    # Visibility only: is anything in the way within `max_t`? A backend with
+    # hardware ray queries stops at the first hit it finds instead of
+    # searching for the closest one, which is most of the cost of a shadow
+    # ray.
+    "trace_shadow": {"kind": "function", "return": "bool", "params": {"ray": "Ray", "max_t": "float"}, "requires": "raytrace.query"},
 }
 
 TYPES["Ray"] = {"fields": {"origin": "vec3", "direction": "vec3"}, "operations": {}}
-TYPES["RayHit"] = {"fields": {"t": "float", "prim": "int", "u": "float", "v": "float", "hit": "bool"}, "operations": {}}
+# `instance` - which object in the scene was hit: the custom index the host
+# gave that instance, so a shader can look up its material and geometry.
+# Emulated backends with a single flat triangle list report 0.
+TYPES["RayHit"] = {"fields": {"t": "float", "prim": "int", "u": "float", "v": "float", "hit": "bool", "instance": "int"}, "operations": {}}

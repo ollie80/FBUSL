@@ -98,12 +98,15 @@ class SemanticAnalyser:
                     Position(),
                 )
 
-            elif kind in ("output", "uniform", "variable"):
+            # "input" builtins (VERTEX_INDEX) were never declared at all;
+            # it only went unnoticed because the one engine shader using
+            # VERTEX_INDEX reads it in if-conditions, which weren't checked.
+            elif kind in ("output", "uniform", "variable", "input"):
                 self.current_scope.declare(
                     builtin_name,
                     builtin_data.get("type"),
                     Position(),
-                    mutable=(kind != "uniform"),
+                    mutable=(kind not in ("uniform", "input")),
                 )
 
     def define_function(
@@ -217,10 +220,15 @@ class SemanticAnalyser:
             if node.value:
                 value_type = self.get_node_type(node.value)
 
-            node.type = self.get_type_name(node.type)
+            # The declared type is kept as-is when it's an array: collapsing
+            # it to its name ("array") threw away the element type and
+            # length every generator needs to declare the variable.
+            declared_name = self.get_type_name(node.type)
+            if not self._is_array_type(node.type):
+                node.type = declared_name
 
             if value_type is not None and not self.type_match(
-                node.type,
+                declared_name,
                 value_type
             ):
                 fbusl_error(
@@ -284,14 +292,30 @@ class SemanticAnalyser:
         elif isinstance(node, SharedDecl):
             node.type = self.get_type_name(node.type)
 
-        elif isinstance(node, Output):
-            node.type = self.get_node_type(node)
+        # Conditions aren't in `children` (only bodies are), so the generic
+        # branch below never reached them: every if/elif/while condition
+        # went untyped. GLSL generators print conditions as text and never
+        # noticed; a generator that emits typed instructions can't.
+        elif isinstance(node, IfStatement):
+            if node.condition is not None:
+                self.set_node_types(node.condition)
+            for stmt in node.body:
+                self.set_node_types(stmt)
+            if node.next_statement is not None:
+                self.set_node_types(node.next_statement)
+            node.type = "void"
 
-        elif isinstance(node, Input):
-            node.type = self.get_node_type(node)
+        elif isinstance(node, WhileStatement):
+            self.set_node_types(node.condition)
+            for stmt in node.body:
+                self.set_node_types(stmt)
+            node.type = "void"
 
-        elif isinstance(node, Uniform):
-            node.type = self.get_node_type(node)
+        # Same reasoning as VarDecl above: an array-typed uniform/input/output
+        # keeps its full declared type.
+        elif isinstance(node, (Output, Input, Uniform)):
+            if not self._is_array_type(node.type):
+                node.type = self.get_node_type(node)
 
         elif getattr(node, "children", None):
             for child in node.children:
@@ -410,6 +434,10 @@ class SemanticAnalyser:
 
         return self.get_node_type(node)
 
+    @staticmethod
+    def _is_array_type(t) -> bool:
+        return isinstance(t, dict) and t.get("name") == "array"
+
     def type_match(self, t1: str, t2: str):
         return t1 == t2
 
@@ -425,6 +453,9 @@ class SemanticAnalyser:
 
         elif isinstance(node, Uniform):
             self.analyse_uniform(node)
+
+        elif isinstance(node, Define):
+            self.analyse_define(node)
 
         elif isinstance(node, VarDecl):
             self.analyse_var_decl(node)
@@ -447,6 +478,11 @@ class SemanticAnalyser:
 
         elif isinstance(node, FuncCall):
             self.analyse_function_call(node)
+
+        # A condition can call functions and reference variables like any
+        # other expression, so it's checked like one - see set_node_types.
+        elif isinstance(node, (IfStatement, WhileStatement)) and node.condition is not None:
+            self.analyse_node(node.condition)
 
         for child in getattr(node, "children", []):
             if child is not None:
@@ -483,6 +519,12 @@ class SemanticAnalyser:
             node.type,
             node.pos
         )
+
+    def analyse_define(self, node: Define):
+        """A `@define NAME = value` is a constant of its value's type.
+        Never declared before, so using one failed with "not defined" -
+        except in shaders whose injector happened to supply the name."""
+        self.current_scope.declare(node.name, self.get_node_type(node.value), node.pos, False)
 
     def analyse_uniform(self, node: Uniform):
         self.current_scope.declare(
