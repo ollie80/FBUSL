@@ -218,6 +218,57 @@ BUILTINS = {
 # GLSL as-is). Needed for any real shading (normals, reflections, Fresnel,
 # noise/hash) - a raytrace kernel can't do lighting at all without them.
 "sqrt": {"return": "float", "params": {"x": "float"}, "kind": "function"},
+# sin/cos/abs, componentwise over genType exactly as GLSL defines them.
+# Like the rest of this block these need no generator IMPLEMENTATIONS entry
+# - the default call codegen emits `name(args...)`, which is already the
+# correct GLSL spelling for all three.
+#
+# Their absence was a real hole rather than an oversight to work around:
+# without sin and cos a shader cannot do rotation, any periodic motion, or
+# the fract(sin(x) * k) hash that most procedural noise is built on, and
+# without abs there is no way to fold a value about zero short of writing
+# max(x, -x) by hand at every use.
+"sin": {
+    "kind": "function",
+    "return": "float",
+    "overloads": [
+        {"params": {"x": "float"}, "return": "float"},
+        {"params": {"x": "vec2"}, "return": "vec2"},
+        {"params": {"x": "vec3"}, "return": "vec3"},
+        {"params": {"x": "vec4"}, "return": "vec4"},
+    ],
+},
+"cos": {
+    "kind": "function",
+    "return": "float",
+    "overloads": [
+        {"params": {"x": "float"}, "return": "float"},
+        {"params": {"x": "vec2"}, "return": "vec2"},
+        {"params": {"x": "vec3"}, "return": "vec3"},
+        {"params": {"x": "vec4"}, "return": "vec4"},
+    ],
+},
+"atan": {
+    "kind": "function",
+    "return": "float",
+    "overloads": [
+        # Two-argument form first: atan(y, x) is the quadrant-correct one,
+        # and the only way to get an angle out of a direction vector. GLSL
+        # spells both forms `atan`, so no generator entry is needed.
+        {"params": {"y": "float", "x": "float"}, "return": "float"},
+        {"params": {"y_over_x": "float"}, "return": "float"},
+    ],
+},
+"abs": {
+    "kind": "function",
+    "return": "float",
+    "overloads": [
+        {"params": {"x": "float"}, "return": "float"},
+        {"params": {"x": "vec2"}, "return": "vec2"},
+        {"params": {"x": "vec3"}, "return": "vec3"},
+        {"params": {"x": "vec4"}, "return": "vec4"},
+    ],
+},
 "floor": {"return": "float", "params": {"x": "float"}, "kind": "function"},
 "fract": {"return": "float", "params": {"x": "float"}, "kind": "function"},
 "pow": {
